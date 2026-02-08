@@ -1,0 +1,238 @@
+graph TD
+    %% ============================================================
+    %% JobAcademy ML for Marketing — Complete Knowledge Graph
+    %% ~65 atomic concepts · 8 layers · Sports as laboratory
+    %% Prerequisite DAG: A → B means "A is required for B"
+    %% ============================================================
+
+    %% ── LAYER 0: Mathematical Foundations ──────────────────────
+    PROB["🔵 Probability<br/>Basics"]
+    BAYES["🔵 Bayes<br/>Theorem"]
+    LINALG["🔵 Linear Algebra<br/>Vectors · Matrices"]
+    CALC["🔵 Derivatives<br/>& Chain Rule"]
+    DIST["🔵 Distance<br/>Metrics"]
+    EV["🔵 Expected Value<br/>& Variance"]
+    SUMRULE["🔵 Law of Total<br/>Probability"]
+
+    %% ── LAYER 1: ML Core Primitives ───────────────────────────
+    COND["🟢 Conditional<br/>Independence"]
+    CONF["🟢 Confusion<br/>Matrix"]
+    PR["🟢 Precision<br/>Recall · F1"]
+    ROC["🟢 ROC<br/>& AUC"]
+    GD["🟢 Gradient<br/>Descent"]
+    LOSS["🟢 Loss<br/>Functions"]
+    OVERFIT["🟢 Overfitting &<br/>Regularization"]
+    FEAT["🟢 Feature<br/>Scaling"]
+    ENTROPY["🟢 Entropy &<br/>Information Gain"]
+    SIGMOID["🟢 Sigmoid<br/>Function"]
+    KERNEL["🟢 Kernel<br/>Trick"]
+    CROSSVAL["🟢 Cross-<br/>Validation"]
+
+    %% ── LAYER 2: Supervised Models ────────────────────────────
+    NB["🟡 Naive<br/>Bayes"]
+    KNN["🟡 K-Nearest<br/>Neighbors"]
+    DT["🟡 Decision<br/>Trees"]
+    LINREG["🟡 Linear<br/>Regression"]
+    LOGREG["🟡 Logistic<br/>Regression"]
+    SVM["🟡 Support Vector<br/>Machine"]
+    RF["🟡 Random<br/>Forest"]
+    GBM["🟡 Gradient<br/>Boosting"]
+
+    %% ── LAYER 2b: Unsupervised ────────────────────────────────
+    KMEANS["🟡 K-Means<br/>Clustering"]
+    SVD["🟡 Singular Value<br/>Decomposition"]
+
+    %% ── LAYER 3: Stats & Experimentation ──────────────────────
+    HYPO["🔷 Hypothesis<br/>Testing"]
+    POWER["🔷 Power Analysis<br/>& Sample Size"]
+    BOOTSTR["🔷 Bootstrap &<br/>Resampling"]
+    REGRINF["🔷 Regression for<br/>Inference"]
+    TS_BASICS["🔷 Time Series<br/>Basics"]
+
+    %% ── LAYER 4: Causal Inference ─────────────────────────────
+    PO["🔶 Potential<br/>Outcomes"]
+    ATE["🔶 Average Treatment<br/>Effect"]
+    CONFBIAS["🔶 Confounding &<br/>Selection Bias"]
+    RCT["🔶 A/B Testing<br/>(RCT Design)"]
+    DID["🔶 Difference-in-<br/>Differences"]
+    PSM["🔶 Propensity Score<br/>Matching"]
+    SYNTH["🔶 Synthetic<br/>Control"]
+
+    %% ── LAYER 5: Marketing Science Core ───────────────────────
+    CLV["🟣 Customer<br/>Lifetime Value"]
+    RESP["🟣 Response<br/>Modeling"]
+    SEG["🟣 Behavioral<br/>Segmentation"]
+    INCR["🟣 Incrementality<br/>Testing"]
+    UPLIFT["🟣 Uplift<br/>Modeling"]
+    CHURN["🟣 Churn &<br/>Retention"]
+    ATTR["🟣 Attribution<br/>(& Its Limits)"]
+    DIMRET["🟣 Diminishing<br/>Returns"]
+
+    %% ── LAYER 6: Marketing Systems ───────────────────────────
+    MMM["🔴 Media Mix<br/>Modeling"]
+    PRICE["🔴 Price<br/>Elasticity"]
+    PORTF["🔴 Budget<br/>Allocation"]
+    FORECAST["🔴 Demand<br/>Forecasting"]
+    RECSYS["🔴 Recommendation<br/>Systems"]
+    LTRANK["🔴 Learning<br/>to Rank"]
+
+    %% ── LAYER 7: Sports Laboratory Projects ──────────────────
+    P_TICKET["⚡ Ticket Pricing<br/>Optimization"]
+    P_SPONSOR["⚡ Sponsorship<br/>ROI Measurement"]
+    P_FANCLV["⚡ Fan CLV &<br/>Retention System"]
+    P_DEMAND["⚡ Event Demand<br/>Forecasting"]
+    P_BRAND["⚡ Athlete Brand<br/>Valuation"]
+    P_CAMPAIGN["⚡ Campaign<br/>Incrementality"]
+
+    %% ============================================================
+    %% EDGES: Prerequisite Relationships
+    %% ============================================================
+
+    %% ── Math Foundations → ML Core ─────────────────────────────
+    PROB --> BAYES
+    PROB --> COND
+    PROB --> EV
+    PROB --> SUMRULE
+    BAYES --> NB
+    COND --> NB
+    EV --> LOSS
+    EV --> HYPO
+    LINALG --> LINREG
+    LINALG --> SVD
+    CALC --> GD
+    CALC --> LOSS
+
+    %% ── ML Core internal ──────────────────────────────────────
+    CONF --> PR
+    PR --> ROC
+    GD --> LINREG
+    LOSS --> LINREG
+    LOSS --> GD
+    DIST --> KNN
+    DIST --> KMEANS
+    FEAT --> KNN
+    ENTROPY --> DT
+    OVERFIT --> DT
+    OVERFIT --> CROSSVAL
+    LINREG --> LOGREG
+    SIGMOID --> LOGREG
+    LOGREG --> SVM
+    KERNEL --> SVM
+    DT --> RF
+    RF --> GBM
+    GD --> GBM
+
+    %% ── Stats & Experimentation ───────────────────────────────
+    PROB --> HYPO
+    EV --> HYPO
+    HYPO --> POWER
+    HYPO --> BOOTSTR
+    LINREG --> REGRINF
+    HYPO --> REGRINF
+    EV --> TS_BASICS
+    LINREG --> TS_BASICS
+
+    %% ── Causal Inference ──────────────────────────────────────
+    HYPO --> PO
+    EV --> PO
+    PO --> ATE
+    PO --> CONFBIAS
+    ATE --> RCT
+    POWER --> RCT
+    CONFBIAS --> RCT
+    ATE --> DID
+    TS_BASICS --> DID
+    CONFBIAS --> PSM
+    LOGREG --> PSM
+    DID --> SYNTH
+    REGRINF --> SYNTH
+
+    %% ── Marketing Science Core ────────────────────────────────
+    EV --> CLV
+    PROB --> CLV
+    TS_BASICS --> CLV
+    LOGREG --> RESP
+    ROC --> RESP
+    CROSSVAL --> RESP
+    KMEANS --> SEG
+    RESP --> SEG
+    RCT --> INCR
+    ATE --> INCR
+    INCR --> UPLIFT
+    RESP --> UPLIFT
+    DT --> UPLIFT
+    RESP --> CHURN
+    CLV --> CHURN
+    TS_BASICS --> CHURN
+    RCT --> ATTR
+    CONFBIAS --> ATTR
+    REGRINF --> DIMRET
+    CLV --> DIMRET
+
+    %% ── Marketing Systems ────────────────────────────────────
+    REGRINF --> MMM
+    DIMRET --> MMM
+    DID --> MMM
+    TS_BASICS --> MMM
+    DIMRET --> PRICE
+    HYPO --> PRICE
+    CLV --> PRICE
+    MMM --> PORTF
+    CLV --> PORTF
+    PRICE --> PORTF
+    TS_BASICS --> FORECAST
+    GBM --> FORECAST
+    OVERFIT --> FORECAST
+    SVD --> RECSYS
+    DIST --> RECSYS
+    RESP --> RECSYS
+    LOGREG --> LTRANK
+    ROC --> LTRANK
+
+    %% ── Sports Projects (multi-prerequisite) ─────────────────
+    PRICE --> P_TICKET
+    FORECAST --> P_TICKET
+    SEG --> P_TICKET
+
+    INCR --> P_SPONSOR
+    MMM --> P_SPONSOR
+    SYNTH --> P_SPONSOR
+
+    CLV --> P_FANCLV
+    CHURN --> P_FANCLV
+    SEG --> P_FANCLV
+    UPLIFT --> P_FANCLV
+
+    FORECAST --> P_DEMAND
+    TS_BASICS --> P_DEMAND
+    PRICE --> P_DEMAND
+
+    CLV --> P_BRAND
+    RECSYS --> P_BRAND
+    SEG --> P_BRAND
+
+    INCR --> P_CAMPAIGN
+    UPLIFT --> P_CAMPAIGN
+    RCT --> P_CAMPAIGN
+    ATTR --> P_CAMPAIGN
+
+    %% ============================================================
+    %% STYLING
+    %% ============================================================
+    classDef foundation fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#1e3a5f
+    classDef core fill:#d1fae5,stroke:#10b981,stroke-width:2px,color:#065f46
+    classDef supervised fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#78350f
+    classDef stats fill:#e0e7ff,stroke:#6366f1,stroke-width:2px,color:#312e81
+    classDef causal fill:#fff7ed,stroke:#ea580c,stroke-width:2px,color:#7c2d12
+    classDef marketing fill:#f3e8ff,stroke:#9333ea,stroke-width:2px,color:#581c87
+    classDef systems fill:#fee2e2,stroke:#ef4444,stroke-width:2px,color:#7f1d1d
+    classDef project fill:#fef08a,stroke:#ca8a04,stroke-width:3px,color:#713f12
+
+    class PROB,BAYES,LINALG,CALC,DIST,EV,SUMRULE foundation
+    class COND,CONF,PR,ROC,GD,LOSS,OVERFIT,FEAT,ENTROPY,SIGMOID,KERNEL,CROSSVAL core
+    class NB,KNN,DT,LINREG,LOGREG,SVM,RF,GBM,KMEANS,SVD supervised
+    class HYPO,POWER,BOOTSTR,REGRINF,TS_BASICS stats
+    class PO,ATE,CONFBIAS,RCT,DID,PSM,SYNTH causal
+    class CLV,RESP,SEG,INCR,UPLIFT,CHURN,ATTR,DIMRET marketing
+    class MMM,PRICE,PORTF,FORECAST,RECSYS,LTRANK systems
+    class P_TICKET,P_SPONSOR,P_FANCLV,P_DEMAND,P_BRAND,P_CAMPAIGN project
