@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GraduationCap, Eye, ArrowRight, RotateCcw } from 'lucide-react';
+import { GraduationCap, Eye, RotateCcw } from 'lucide-react';
 import { fetchDueCards, answerCard } from '../api/anki';
 import type { DueCard } from '../types/anki';
 import LatexRenderer from '../components/shared/LatexRenderer';

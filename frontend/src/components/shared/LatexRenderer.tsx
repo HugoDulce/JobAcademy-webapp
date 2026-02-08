@@ -19,7 +19,7 @@ export default function LatexRenderer({ content }: Props) {
       } catch { return `<code>${tex}</code>`; }
     })
     // Code blocks
-    .replace(/```(\w*)\n([\s\S]*?)```/g, (_: string, lang: string, code: string) =>
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_: string, _lang: string, code: string) =>
       `<pre class="bg-gray-900 text-green-300 p-3 rounded text-sm overflow-x-auto"><code>${code.replace(/</g, '&lt;')}</code></pre>`
     )
     // Newlines to <br>

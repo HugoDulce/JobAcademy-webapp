@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, ArrowLeft } from 'lucide-react';
-import type { Card } from '../types/card';
 import { fetchCard, createCard, updateCard } from '../api/cards';
 import LatexRenderer from '../components/shared/LatexRenderer';
-import { PILLARS, LAYERS } from '../constants';
 
 export default function CardEditorPage() {
   const { cardId } = useParams();
@@ -68,7 +66,7 @@ export default function CardEditorPage() {
 
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
-          <Field label="Card ID" disabled={!isNew}>
+          <Field label="Card ID">
             <input value={form.card_id} onChange={(e) => setForm({ ...form, card_id: e.target.value })} disabled={!isNew}
               className="w-full border rounded px-3 py-2 text-sm font-mono disabled:bg-gray-100" placeholder="nb-3M-01" />
           </Field>
@@ -119,7 +117,7 @@ export default function CardEditorPage() {
   );
 }
 
-function Field({ label, children, disabled }: { label: string; children: React.ReactNode; disabled?: boolean }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
