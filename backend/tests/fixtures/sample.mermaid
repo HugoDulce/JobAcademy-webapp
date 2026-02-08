@@ -1,0 +1,15 @@
+graph TD
+    PROB["Probability Basics"]
+    BAYES["Bayes Theorem"]
+    NB["Naive Bayes"]
+
+    PROB --> BAYES
+    BAYES --> NB
+
+    classDef foundation fill:#dbeafe,stroke:#3b82f6
+    classDef core fill:#d1fae5,stroke:#10b981
+    classDef supervised fill:#fef3c7,stroke:#f59e0b
+
+    class PROB foundation
+    class BAYES core
+    class NB supervised
