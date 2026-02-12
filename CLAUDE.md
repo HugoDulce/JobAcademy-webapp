@@ -156,10 +156,20 @@ Backend CORS allowlist in `main.py` must include any dev port used by Vite. When
 
 ---
 
+## Open TODOs (pick up next session)
+
+1. **Add numpy + scikit-learn to `backend/requirements.txt`** — programming cards that `import numpy` or `from sklearn...` will fail on Render without these. Add pinned versions, push, and redeploy.
+2. **Verify Render deploy succeeded** — check dashboard or `curl https://<render-url>/api/health`. The push to `main` (commit `4934d7f`) should have triggered auto-deploy.
+3. **Test code execution on Render** — confirm `setrlimit` activates on Linux, numpy/sklearn imports work after adding to requirements.
+4. **Remove ErrorBoundary from App.tsx** — added for debugging blank pages; can be kept or removed once stable.
+
+---
+
 ## Notes
 
 - Monorepo structure: backend/ + frontend/ in one repo
 - Frontend uses @xyflow/react for flow diagram visualization
-- Deployed to Render (render.yaml defines services)
+- Deployed to Render (render.yaml defines services, Dockerfile builds both stages)
 - No Docker locally — Render handles containerization
 - ErrorBoundary in App.tsx wraps each route for debugging render crashes
+- Git remote switched to SSH (`git@github.com:HugoDulce/JobAcademy-webapp.git`)
