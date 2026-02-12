@@ -5,7 +5,7 @@ export function fetchDueCards(): Promise<DueCard[]> {
   return apiFetch<DueCard[]>('/api/anki/due');
 }
 
-export function answerCard(cardId: number, ease: number): Promise<void> {
+export function answerCard(cardId: number | string, ease: number): Promise<void> {
   return apiFetch<void>('/api/anki/answer', {
     method: 'POST',
     body: JSON.stringify({ card_id: cardId, ease }),

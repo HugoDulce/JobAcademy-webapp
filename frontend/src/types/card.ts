@@ -10,6 +10,9 @@ export interface Card {
   knowledge_layer: string | null;
   cognitive_layer: string | null;
   filename: string | null;
+  topic: string | null;
+  concept: string | null;
+  has_visual: boolean;
 }
 
 export interface CardCreate {

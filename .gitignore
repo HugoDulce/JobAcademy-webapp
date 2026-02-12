@@ -16,3 +16,6 @@ backend/static/
 # Environment
 .env
 .DS_Store
+
+# SRS state (per-environment)
+backend/data/srs_state.json

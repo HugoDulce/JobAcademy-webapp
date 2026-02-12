@@ -1,5 +1,5 @@
 export interface DueCard {
-  card_id: number;
+  card_id: number | string;
   note_id: number;
   front: string;
   back: string;

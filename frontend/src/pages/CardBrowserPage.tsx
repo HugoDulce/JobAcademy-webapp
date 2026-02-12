@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import type { Card } from '../types/card';
 import { fetchCards } from '../api/cards';
-import { PILLARS, LAYERS } from '../constants';
+import { PILLARS, LAYERS, TOPICS } from '../constants';
 
 export default function CardBrowserPage() {
   const [cards, setCards] = useState<Card[]>([]);
   const [search, setSearch] = useState('');
   const [pillarFilter, setPillarFilter] = useState('');
   const [layerFilter, setLayerFilter] = useState('');
+  const [topicFilter, setTopicFilter] = useState('');
   const [sortCol, setSortCol] = useState<keyof Card>('card_id');
   const [sortAsc, setSortAsc] = useState(true);
 
@@ -22,6 +23,7 @@ export default function CardBrowserPage() {
       cards
         .filter((c) => !pillarFilter || c.pillar === pillarFilter)
         .filter((c) => !layerFilter || c.knowledge_layer === layerFilter)
+        .filter((c) => !topicFilter || c.topic === topicFilter)
         .filter(
           (c) =>
             !search ||
@@ -34,7 +36,7 @@ export default function CardBrowserPage() {
           const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true });
           return sortAsc ? cmp : -cmp;
         }),
-    [cards, pillarFilter, layerFilter, search, sortCol, sortAsc]
+    [cards, pillarFilter, layerFilter, topicFilter, search, sortCol, sortAsc]
   );
 
   function toggleSort(col: keyof Card) {
@@ -62,6 +64,10 @@ export default function CardBrowserPage() {
             className="w-full pl-9 pr-3 py-2 border rounded-md text-sm"
           />
         </div>
+        <select value={topicFilter} onChange={(e) => setTopicFilter(e.target.value)} className="border rounded-md px-3 py-2 text-sm">
+          <option value="">All Topics</option>
+          {TOPICS.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
         <select value={pillarFilter} onChange={(e) => setPillarFilter(e.target.value)} className="border rounded-md px-3 py-2 text-sm">
           <option value="">All Pillars</option>
           {PILLARS.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -76,7 +82,7 @@ export default function CardBrowserPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600">
             <tr>
-              {(['card_id', 'pillar', 'knowledge_layer', 'fire_weight'] as const).map((col) => (
+              {(['card_id', 'topic', 'pillar', 'knowledge_layer', 'fire_weight'] as const).map((col) => (
                 <th key={col} className="px-4 py-3 text-left cursor-pointer hover:bg-gray-100" onClick={() => toggleSort(col)}>
                   {col.replace('_', ' ')}{sortCol === col ? (sortAsc ? ' ^' : ' v') : ''}
                 </th>
@@ -92,11 +98,23 @@ export default function CardBrowserPage() {
                     {c.card_id}
                   </Link>
                 </td>
+                <td className="px-4 py-3">
+                  {c.topic && (
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      c.topic === 'naive-bayes' ? 'bg-orange-100 text-orange-700' :
+                      'bg-teal-100 text-teal-700'
+                    }`}>
+                      {c.topic}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3">{c.pillar}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                     c.knowledge_layer === 'Conceptual' ? 'bg-blue-100 text-blue-700' :
                     c.knowledge_layer === 'Mathematical' ? 'bg-purple-100 text-purple-700' :
+                    c.knowledge_layer === 'Visual' ? 'bg-amber-100 text-amber-700' :
+                    c.knowledge_layer === 'Integration' ? 'bg-red-100 text-red-700' :
                     'bg-green-100 text-green-700'
                   }`}>
                     {c.knowledge_layer}

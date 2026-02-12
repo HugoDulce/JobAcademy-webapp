@@ -14,6 +14,9 @@ class Card(BaseModel):
     knowledge_layer: str | None = None
     cognitive_layer: str | None = None
     filename: str | None = None
+    topic: str | None = None
+    concept: str | None = None
+    has_visual: bool = False
 
 
 class CardCreate(BaseModel):

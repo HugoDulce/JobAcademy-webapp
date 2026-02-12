@@ -1,10 +1,11 @@
 import type { Card, CardCreate, CardUpdate, ValidationResult } from '../types/card';
 import { apiFetch } from './client';
 
-export function fetchCards(params?: { pillar?: string; layer?: string; search?: string }): Promise<Card[]> {
+export function fetchCards(params?: { pillar?: string; layer?: string; topic?: string; search?: string }): Promise<Card[]> {
   const qs = new URLSearchParams();
   if (params?.pillar) qs.set('pillar', params.pillar);
   if (params?.layer) qs.set('layer', params.layer);
+  if (params?.topic) qs.set('topic', params.topic);
   if (params?.search) qs.set('search', params.search);
   const q = qs.toString();
   return apiFetch<Card[]>(`/api/cards${q ? '?' + q : ''}`);

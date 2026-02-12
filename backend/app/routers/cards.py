@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api/cards", tags=["cards"])
 def list_cards(
     pillar: str | None = Query(None),
     layer: str | None = Query(None),
+    topic: str | None = Query(None),
     search: str | None = Query(None),
 ):
     """List all cards with optional filters."""
@@ -26,6 +27,8 @@ def list_cards(
             for c in cards
             if c.knowledge_layer and layer.lower() in c.knowledge_layer.lower()
         ]
+    if topic:
+        cards = [c for c in cards if c.topic and topic.lower() == c.topic.lower()]
     if search:
         q = search.lower()
         cards = [

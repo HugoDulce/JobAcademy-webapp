@@ -8,9 +8,9 @@ from app.config import SCRIPTS_DIR, SYNC_LOG
 
 
 async def run_notion_to_obsidian() -> dict:
-    """Run the Notion -> Obsidian sync script."""
-    script = SCRIPTS_DIR / "notion_to_obsidian.py"
-    return await _run_script(script, "notion_to_obsidian")
+    """Run the Notion -> All sync script."""
+    script = SCRIPTS_DIR / "sync_notion_to_all.py"
+    return await _run_script(script, "sync_notion_to_all")
 
 
 async def run_obsidian_to_anki() -> dict:

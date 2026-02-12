@@ -21,29 +21,100 @@ LAYER_MAP = {
     "M": "Mathematical",
     "P": "Programming",
     "I": "Integration",
+    "V": "Visual",
 }
 
 # Special prefixes
 SPECIAL_PREFIXES = {"CF", "D", "EXT", "MKT"}
 
+# Concept prefix -> concept name (prefix in card_id -> concept)
+CONCEPT_PREFIX_MAP = {
+    "norm": "NORMAL",
+    "pois": "POISSON",
+    "binom": "BINOMIAL",
+    "bern": "BERNOULLI",
+    "gamma": "GAMMA",
+    "beta": "BETA",
+    "unif": "UNIFORM",
+    "stud": "STUDENT_T",
+    "weib": "WEIBULL",
+    "lnorm": "LOGNORMAL",
+    "dunif": "DISCRETE_UNIFORM",
+    "hyper": "HYPERGEOMETRIC",
+    "nbinom": "NEGATIVE_BINOMIAL",
+    "geom": "GEOMETRIC",
+    "prob": "PROB",
+    "prob-cat": "PROB_CAT",
+    "prob-prop": "PROB_PROP",
+}
+
+# Card ID prefix -> topic
+TOPIC_MAP = {
+    "nb": "naive-bayes",
+    **{k: "probability-distributions" for k in CONCEPT_PREFIX_MAP},
+}
+
+# Sorted longest-first for greedy matching
+_CONCEPT_PREFIXES_SORTED = sorted(CONCEPT_PREFIX_MAP.keys(), key=len, reverse=True)
+
 
 def parse_card_id(card_id: str) -> dict:
-    """Extract pillar and knowledge layer from card_id like 'nb-3M-02'."""
-    # Match standard pattern: concept-pillarLayer-number
-    m = re.match(r"^[a-z]+-(\d)([CMPI])-(\d+[a-z]?)$", card_id)
+    """Extract pillar, knowledge layer, topic, and concept from card_id.
+
+    Supports 4 formats:
+    1. Legacy NB:      nb-3M-01    (prefix-digitLayer-number)
+    2. Concept+Layer:  norm-V-01   (conceptPrefix-Layer-number)
+    3. Concept-only:   prob-cat-01 (conceptPrefix-number)
+    4. Special:        nb-CF-01    (prefix-SPECIAL-number)
+    """
+    result = {
+        "pillar": None,
+        "knowledge_layer": None,
+        "topic": None,
+        "concept": None,
+    }
+
+    # Strategy 1: Legacy NB — e.g. nb-3M-01, nb-1C-02a
+    m = re.match(r"^([a-z]+)-(\d)([CMPIV])-(\d+[a-z]?)$", card_id)
     if m:
-        pillar_num, layer_letter, _ = m.groups()
-        return {
-            "pillar": PILLAR_MAP.get(pillar_num, f"{pillar_num}-Unknown"),
-            "knowledge_layer": LAYER_MAP.get(layer_letter, "Unknown"),
-        }
-    # Match special prefix pattern: concept-PREFIX-number
-    m = re.match(r"^[a-z]+-([A-Z]+)-(\d+[a-z]?)$", card_id)
+        prefix, pillar_num, layer_letter, _ = m.groups()
+        result["pillar"] = PILLAR_MAP.get(pillar_num, f"{pillar_num}-Unknown")
+        result["knowledge_layer"] = LAYER_MAP.get(layer_letter, "Unknown")
+        result["topic"] = TOPIC_MAP.get(prefix)
+        return result
+
+    # Strategy 2: Concept+Layer — e.g. norm-V-01, binom-C-03, prob-cat-M-01
+    for cp in _CONCEPT_PREFIXES_SORTED:
+        pattern = rf"^({re.escape(cp)})-([CMPIV])-(\d+[a-z]?)$"
+        m = re.match(pattern, card_id)
+        if m:
+            matched_prefix, layer_letter, _ = m.groups()
+            result["knowledge_layer"] = LAYER_MAP.get(layer_letter, "Unknown")
+            result["concept"] = CONCEPT_PREFIX_MAP.get(matched_prefix)
+            result["topic"] = TOPIC_MAP.get(matched_prefix)
+            return result
+
+    # Strategy 3: Concept-only — e.g. prob-cat-01, prob-prop-02
+    for cp in _CONCEPT_PREFIXES_SORTED:
+        pattern = rf"^({re.escape(cp)})-(\d+[a-z]?)$"
+        m = re.match(pattern, card_id)
+        if m:
+            matched_prefix, _ = m.groups()
+            result["concept"] = CONCEPT_PREFIX_MAP.get(matched_prefix)
+            result["topic"] = TOPIC_MAP.get(matched_prefix)
+            return result
+
+    # Strategy 4: Special prefix — e.g. nb-CF-01, nb-EXT-02
+    m = re.match(r"^([a-z]+)-([A-Z]+)-(\d+[a-z]?)$", card_id)
     if m:
-        prefix = m.group(1)
-        if prefix in SPECIAL_PREFIXES:
-            return {"pillar": prefix, "knowledge_layer": "Special"}
-    return {"pillar": None, "knowledge_layer": None}
+        prefix, special, _ = m.groups()
+        if special in SPECIAL_PREFIXES:
+            result["pillar"] = special
+            result["knowledge_layer"] = "Special"
+            result["topic"] = TOPIC_MAP.get(prefix)
+            return result
+
+    return result
 
 
 def parse_card_file(filepath: Path) -> Card | None:
@@ -75,6 +146,16 @@ def parse_card_file(filepath: Path) -> Card | None:
     edited_match = re.search(r'notion_last_edited:\s*"?([^"\n]+)"?', fm)
     notion_last_edited = edited_match.group(1).strip() if edited_match else ""
 
+    # Parse new frontmatter fields
+    topic_match = re.search(r'topic:\s*"?([^"\n]+)"?', fm)
+    fm_topic = topic_match.group(1).strip() if topic_match else None
+
+    concept_match = re.search(r'concept:\s*"?([^"\n]+)"?', fm)
+    fm_concept = concept_match.group(1).strip() if concept_match else None
+
+    has_visual_match = re.search(r"has_visual:\s*(true|false)", fm, re.IGNORECASE)
+    has_visual = has_visual_match.group(1).lower() == "true" if has_visual_match else False
+
     # Extract START/END blocks
     blocks = re.findall(r"START\n(.*?)\nEND", text, re.DOTALL)
     if len(blocks) < 2:
@@ -83,8 +164,12 @@ def parse_card_file(filepath: Path) -> Card | None:
     prompt = blocks[0].strip()
     solution = blocks[1].strip()
 
-    # Derive pillar/layer from card_id
+    # Derive pillar/layer/topic/concept from card_id
     id_info = parse_card_id(card_id)
+
+    # Frontmatter values override derived values
+    topic = fm_topic or id_info.get("topic")
+    concept = fm_concept or id_info.get("concept")
 
     # Derive cognitive layer from tags
     cognitive_layer = None
@@ -114,6 +199,9 @@ def parse_card_file(filepath: Path) -> Card | None:
         knowledge_layer=id_info["knowledge_layer"],
         cognitive_layer=cognitive_layer,
         filename=filepath.name,
+        topic=topic,
+        concept=concept,
+        has_visual=has_visual,
     )
 
 
@@ -127,6 +215,14 @@ def card_to_markdown(card: Card) -> str:
         f'card_id: "{card.card_id}"',
         f"fire_weight: {card.fire_weight}",
         f'notion_last_edited: "{card.notion_last_edited}"',
+    ]
+    if card.topic:
+        lines.append(f'topic: "{card.topic}"')
+    if card.concept:
+        lines.append(f'concept: "{card.concept}"')
+    if card.has_visual:
+        lines.append("has_visual: true")
+    lines.extend([
         "---",
         "",
         f"# {card.card_id}",
@@ -139,5 +235,5 @@ def card_to_markdown(card: Card) -> str:
         card.solution,
         "END",
         "",
-    ]
+    ])
     return "\n".join(lines)

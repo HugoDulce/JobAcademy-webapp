@@ -37,7 +37,13 @@ def validate_card(card_data: dict) -> ValidationResult:
         warnings.append("No tags specified")
 
     # --- Card ID format ---
-    id_pattern = r"^[a-z]+-\d+[CMPI]-\d+[a-z]?$|^[a-z]+-[A-Z]+-\d+[a-z]?$"
+    # Accepts: nb-3M-01 (legacy NB), nb-CF-01 (special), norm-V-01 (concept+layer), prob-cat-01 (concept-only)
+    id_pattern = (
+        r"^[a-z]+-\d[CMPIV]-\d+[a-z]?$"            # legacy NB: nb-3M-01
+        r"|^[a-z]+-[A-Z]+-\d+[a-z]?$"               # special: nb-CF-01
+        r"|^[a-z](?:[a-z-]*[a-z])?-[CMPIV]-\d+[a-z]?$"  # concept+layer: norm-V-01
+        r"|^[a-z](?:[a-z-]*[a-z])?-\d+[a-z]?$"      # concept-only: prob-cat-01
+    )
     checks["valid_card_id"] = bool(re.match(id_pattern, card_id))
     if not checks["valid_card_id"]:
         warnings.append(f"Card ID '{card_id}' doesn't follow naming convention")
