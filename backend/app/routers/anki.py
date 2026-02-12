@@ -5,7 +5,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.services import anki_service, srs_service
+from app.services import anki_service, card_service, srs_service
 
 router = APIRouter(prefix="/api/anki", tags=["anki"])
 
@@ -73,4 +73,32 @@ def answer_card(req: AnswerRequest):
             pass
 
     srs_service.answer_card(str(req.card_id), req.ease)
+    return {"success": True}
+
+
+class UpdateNoteRequest(BaseModel):
+    note_id: int | str
+    front: str
+    back: str
+    card_id: str | None = None
+
+
+@router.put("/update-note")
+def update_note(req: UpdateNoteRequest):
+    """Update a card's front/back content (Anki and/or internal markdown)."""
+    # Update in Anki if connected and note_id is a real Anki int ID
+    if _is_anki_available() and isinstance(req.note_id, int):
+        try:
+            anki_service.update_note(req.note_id, req.front, req.back)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Anki update failed: {e}")
+
+    # Update internal card if card_id provided
+    if req.card_id:
+        card = card_service.get_card(req.card_id)
+        if card:
+            card.prompt = req.front
+            card.solution = req.back
+            card_service.save_card(card)
+
     return {"success": True}

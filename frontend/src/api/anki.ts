@@ -12,6 +12,18 @@ export function answerCard(cardId: number | string, ease: number): Promise<void>
   });
 }
 
+export function updateNote(
+  noteId: number | string,
+  front: string,
+  back: string,
+  cardId?: string,
+): Promise<void> {
+  return apiFetch<void>('/api/anki/update-note', {
+    method: 'PUT',
+    body: JSON.stringify({ note_id: noteId, front, back, card_id: cardId }),
+  });
+}
+
 export function fetchAnkiStats(): Promise<AnkiStats> {
   return apiFetch<AnkiStats>('/api/anki/stats');
 }

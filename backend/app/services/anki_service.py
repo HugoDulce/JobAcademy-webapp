@@ -100,6 +100,12 @@ def get_due_cards() -> list[dict]:
     return result
 
 
+def update_note(note_id: int, front: str, back: str) -> bool:
+    """Update the Front/Back fields of an Anki note via AnkiConnect."""
+    _invoke("updateNoteFields", note={"id": note_id, "fields": {"Front": front, "Back": back}})
+    return True
+
+
 def answer_card(card_id: int, ease: int) -> bool:
     """Submit an answer for a card. ease: 1=again, 2=hard, 3=good, 4=easy."""
     _invoke("answerCards", answers=[{"cardId": card_id, "ease": ease}])

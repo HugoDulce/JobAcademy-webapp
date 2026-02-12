@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
-import { GraduationCap, Eye, RotateCcw, Play, Code } from 'lucide-react';
-import { fetchDueCards, answerCard, checkAnkiStatus } from '../api/anki';
+import { useEffect, useState, lazy, Suspense } from 'react';
+import { GraduationCap, Eye, RotateCcw, Play, Code, Pencil } from 'lucide-react';
+import { fetchDueCards, answerCard, updateNote, checkAnkiStatus } from '../api/anki';
 import { executeCode } from '../api/code';
 import type { DueCard } from '../types/anki';
 import type { CodeExecuteResponse } from '../api/code';
 import LatexRenderer from '../components/shared/LatexRenderer';
-import CodeEditor from '../components/shared/CodeEditor';
-import CodeOutputPanel from '../components/shared/CodeOutputPanel';
+import CardEditModal from '../components/shared/CardEditModal';
+
+const CodeEditor = lazy(() => import('../components/shared/CodeEditor'));
+const CodeOutputPanel = lazy(() => import('../components/shared/CodeOutputPanel'));
 
 type SessionState = 'loading' | 'start' | 'prompt' | 'answer' | 'done' | 'error' | 'no-cards';
 
@@ -48,6 +50,8 @@ export default function DrillSessionPage() {
   const [results, setResults] = useState<{ card_id: number | string; ease: number }[]>([]);
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'anki' | 'server-srs' | null>(null);
+
+  const [isEditing, setIsEditing] = useState(false);
 
   // Code execution state
   const [userCode, setUserCode] = useState('');
@@ -211,7 +215,16 @@ export default function DrillSessionPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-        <span>Card {current + 1} of {cards.length}</span>
+        <span className="flex items-center gap-2">
+          Card {current + 1} of {cards.length}
+          <button
+            onClick={() => setIsEditing(true)}
+            className="p-1 text-gray-400 hover:text-indigo-600 rounded"
+            title="Edit card"
+          >
+            <Pencil size={14} />
+          </button>
+        </span>
         <span>{correct} correct so far</span>
       </div>
 
@@ -232,27 +245,29 @@ export default function DrillSessionPage() {
 
       {/* Code editor for programming cards */}
       {programming && (
-        <div className="mb-4 space-y-3">
-          <CodeEditor
-            value={userCode}
-            onChange={setUserCode}
-            onRun={runCode}
-          />
+        <Suspense fallback={<div className="text-gray-400 text-sm">Loading editor...</div>}>
+          <div className="mb-4 space-y-3">
+            <CodeEditor
+              value={userCode}
+              onChange={setUserCode}
+              onRun={runCode}
+            />
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={runCode}
-              disabled={isRunning || !userCode.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-            >
-              <Play size={14} />
-              {isRunning ? 'Running...' : 'Run Code'}
-            </button>
-            <span className="text-xs text-gray-400">Ctrl+Enter to run</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={runCode}
+                disabled={isRunning || !userCode.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                <Play size={14} />
+                {isRunning ? 'Running...' : 'Run Code'}
+              </button>
+              <span className="text-xs text-gray-400">Ctrl+Enter to run</span>
+            </div>
+
+            <CodeOutputPanel result={codeOutput} isRunning={isRunning} />
           </div>
-
-          <CodeOutputPanel result={codeOutput} isRunning={isRunning} />
-        </div>
+        </Suspense>
       )}
 
       {/* Show Answer button */}
@@ -283,6 +298,23 @@ export default function DrillSessionPage() {
         <span>Deck: {card.deck}</span>
         <span>Tags: {card.tags.join(', ')}</span>
       </div>
+
+      {isEditing && (
+        <CardEditModal
+          card={card}
+          onClose={() => setIsEditing(false)}
+          onSave={async (newFront, newBack) => {
+            const internalCardId = card.tags.find((t) => /^nb-/.test(t));
+            await updateNote(card.note_id, newFront, newBack, internalCardId);
+            setCards((prev) =>
+              prev.map((c, i) =>
+                i === current ? { ...c, front: newFront, back: newBack } : c,
+              ),
+            );
+            setIsEditing(false);
+          }}
+        />
+      )}
     </div>
   );
 }
