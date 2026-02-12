@@ -7,7 +7,7 @@ A learning management system for structured flashcard-based study, built around 
 - **Card Browser** — filter/sort 42 cards by pillar, knowledge layer, and search
 - **Card Editor** — create/edit cards with live LaTeX preview
 - **Knowledge Graph** — interactive DAG of ML concepts (dagre + React Flow)
-- **Drill Session** — spaced repetition review via AnkiConnect (optional)
+- **Drill Session** — spaced repetition review via AnkiConnect (optional), with inline card editing
 - **FIRe Inspector** — heatmap, credit simulator, and encompassing tree
 - **Sync Panel** — trigger Notion → Obsidian → Anki pipeline (optional)
 - **Dashboard** — stats overview with graceful degradation when Anki is offline
@@ -92,7 +92,7 @@ source venv/bin/activate
 pytest tests/ -v
 ```
 
-35 tests covering card parsing, mermaid graph parsing, FIRe hierarchy parsing, and card validation rules.
+45 tests covering card parsing, mermaid graph parsing, FIRe hierarchy parsing, card validation rules, and the card update API endpoint.
 
 ## Deployment
 

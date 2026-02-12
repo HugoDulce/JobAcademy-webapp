@@ -138,6 +138,19 @@ Programming drill cards support server-side Python execution via `POST /api/code
 
 **Files:** `backend/app/services/code_executor.py`, `backend/app/routers/code.py`, `frontend/src/components/shared/CodeEditor.tsx`, `frontend/src/components/shared/CodeOutputPanel.tsx`, `frontend/src/api/code.ts`.
 
+### Inline Card Edit Modal (2026-02-12)
+
+Drill sessions support editing card content (front/back) without leaving the review flow, like Anki's edit button.
+
+**Dual-system update:** Cards can come from Anki (via AnkiConnect, int `note_id`) or internal markdown (server-SRS, string `card_id`). The endpoint handles both:
+- Anki path: calls `updateNoteFields` via AnkiConnect
+- Internal path: updates `prompt`/`solution` fields on the Card model and saves to disk via `card_service`
+- Both paths run when applicable (Anki + card_id provided)
+
+**WYSIWYG editing:** Uses `contentEditable` divs instead of textareas so HTML content (`<br>`, `<b>`, etc.) renders visually — no raw HTML editing. On save, reads `innerHTML` from refs.
+
+**Files:** `backend/app/services/anki_service.py` (`update_note`), `backend/app/routers/anki.py` (`PUT /api/anki/update-note`), `frontend/src/api/anki.ts` (`updateNote`), `frontend/src/components/shared/CardEditModal.tsx`, `frontend/src/pages/DrillSessionPage.tsx`.
+
 ---
 
 ## Lessons Learned
@@ -154,14 +167,23 @@ The Laravel Docker container (`webapp-laravel-laravel.test-1`) binds `0.0.0.0:51
 
 Backend CORS allowlist in `main.py` must include any dev port used by Vite. When changing Vite's port, update `allow_origins` too.
 
+### CSP + CodeMirror lazy loading (2026-02-12)
+
+Browser extensions can inject a Content Security Policy that blocks `eval`. CodeMirror (used by `CodeEditor.tsx`) triggers this, crashing the entire DrillSessionPage at import time — blank white page, no console errors (just a CSP warning). **Fix:** lazy-load CodeMirror components with `React.lazy()` + `<Suspense>`. The drill page loads normally; the code editor only loads when a programming card appears. **Rule: always lazy-load heavy third-party libraries (CodeMirror, Monaco, etc.) that might use eval/Function.**
+
+### Backend tests require venv (2026-02-12)
+
+The pyenv global Python lacks `httpx`, so `FastAPI.TestClient` fails. Always run tests with the backend venv: `./venv/bin/python -m pytest tests/ -v`. The uvicorn process uses the system Python at `/Library/Frameworks/Python.framework/Versions/3.12/` which has all deps installed.
+
 ---
 
 ## Open TODOs (pick up next session)
 
 1. **Add numpy + scikit-learn to `backend/requirements.txt`** — programming cards that `import numpy` or `from sklearn...` will fail on Render without these. Add pinned versions, push, and redeploy.
-2. **Verify Render deploy succeeded** — check dashboard or `curl https://<render-url>/api/health`. The push to `main` (commit `4934d7f`) should have triggered auto-deploy.
+2. **Verify Render deploy succeeded** — check dashboard or `curl https://<render-url>/api/health`. The push to `main` should have triggered auto-deploy.
 3. **Test code execution on Render** — confirm `setrlimit` activates on Linux, numpy/sklearn imports work after adding to requirements.
-4. **Remove ErrorBoundary from App.tsx** — added for debugging blank pages; can be kept or removed once stable.
+4. **Keep ErrorBoundary in App.tsx** — useful for catching render crashes; no downside to keeping it.
+5. **Frontend test infrastructure** — no test framework exists yet. Consider adding vitest + @testing-library/react for component tests (CardEditModal, DrillSessionPage, etc.).
 
 ---
 
