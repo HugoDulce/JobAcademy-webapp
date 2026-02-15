@@ -22,6 +22,12 @@ def list_cards() -> list[Card]:
     return cards
 
 
+def list_cards_by_concept(concept_node: str) -> list[Card]:
+    """List cards by exact concept_node match."""
+    concept = concept_node.strip()
+    return [card for card in list_cards() if (card.concept_node or "").strip() == concept]
+
+
 def get_card(card_id: str) -> Card | None:
     """Get a single card by card_id."""
     # Try direct filename match first (flat layout)

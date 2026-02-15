@@ -30,3 +30,7 @@ export function deleteCard(cardId: string): Promise<void> {
 export function validateCard(cardId: string): Promise<ValidationResult> {
   return apiFetch<ValidationResult>(`/api/cards/${cardId}/validate`);
 }
+
+export function fetchCardsByConcept(conceptNode: string): Promise<Card[]> {
+  return apiFetch<Card[]>(`/api/cards/by-concept/${encodeURIComponent(conceptNode)}`);
+}

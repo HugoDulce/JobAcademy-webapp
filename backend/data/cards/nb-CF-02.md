@@ -4,6 +4,8 @@ tags: [uncategorized, programming, debug]
 card_id: "nb-CF-02"
 fire_weight: 0.6
 notion_last_edited: "2026-02-08T17:07:00.000Z"
+concept_node: "NB"
+subtopic: "implementation-numpy"
 ---
 
 # nb-CF-02

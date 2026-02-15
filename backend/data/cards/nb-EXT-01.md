@@ -4,6 +4,8 @@ tags: [uncategorized, programming, extend]
 card_id: "nb-EXT-01"
 fire_weight: 0.9
 notion_last_edited: "2026-02-08T17:09:00.000Z"
+concept_node: "NB"
+subtopic: "implementation-numpy"
 ---
 
 # nb-EXT-01

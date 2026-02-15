@@ -54,6 +54,12 @@ TOPIC_MAP = {
     **{k: "probability-distributions" for k in CONCEPT_PREFIX_MAP},
 }
 
+# Graph node ID → card topic prefix(es) for linking nodes to drillable cards
+NODE_CARD_MAP: dict[str, list[str]] = {
+    "NB": ["nb"],
+    # Future: "LOGREG": ["logreg"], "KNN": ["knn"], etc.
+}
+
 # Sorted longest-first for greedy matching
 _CONCEPT_PREFIXES_SORTED = sorted(CONCEPT_PREFIX_MAP.keys(), key=len, reverse=True)
 
@@ -156,6 +162,12 @@ def parse_card_file(filepath: Path) -> Card | None:
     has_visual_match = re.search(r"has_visual:\s*(true|false)", fm, re.IGNORECASE)
     has_visual = has_visual_match.group(1).lower() == "true" if has_visual_match else False
 
+    concept_node_match = re.search(r'concept_node:\s*"?([^"\n]+)"?', fm)
+    concept_node = concept_node_match.group(1).strip() if concept_node_match else None
+
+    subtopic_match = re.search(r'subtopic:\s*"?([^"\n]+)"?', fm)
+    subtopic = subtopic_match.group(1).strip() if subtopic_match else None
+
     # Extract START/END blocks
     blocks = re.findall(r"START\n(.*?)\nEND", text, re.DOTALL)
     if len(blocks) < 2:
@@ -202,6 +214,8 @@ def parse_card_file(filepath: Path) -> Card | None:
         topic=topic,
         concept=concept,
         has_visual=has_visual,
+        concept_node=concept_node,
+        subtopic=subtopic,
     )
 
 
@@ -222,6 +236,10 @@ def card_to_markdown(card: Card) -> str:
         lines.append(f'concept: "{card.concept}"')
     if card.has_visual:
         lines.append("has_visual: true")
+    if card.concept_node:
+        lines.append(f'concept_node: "{card.concept_node}"')
+    if card.subtopic:
+        lines.append(f'subtopic: "{card.subtopic}"')
     lines.extend([
         "---",
         "",

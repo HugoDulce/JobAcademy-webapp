@@ -17,6 +17,8 @@ class Card(BaseModel):
     topic: str | None = None
     concept: str | None = None
     has_visual: bool = False
+    concept_node: str | None = None
+    subtopic: str | None = None
 
 
 class CardCreate(BaseModel):
@@ -26,6 +28,8 @@ class CardCreate(BaseModel):
     fire_weight: float = 0.5
     prompt: str
     solution: str
+    concept_node: str | None = None
+    subtopic: str | None = None
 
 
 class CardUpdate(BaseModel):

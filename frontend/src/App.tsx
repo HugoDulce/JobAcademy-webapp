@@ -36,6 +36,7 @@ export default function App() {
           <Route path="/cards/new" element={<ErrorBoundary><CardEditorPage /></ErrorBoundary>} />
           <Route path="/cards/:cardId/edit" element={<ErrorBoundary><CardEditorPage /></ErrorBoundary>} />
           <Route path="/graph" element={<ErrorBoundary><KnowledgeGraphPage /></ErrorBoundary>} />
+          <Route path="/drill/:nodeId" element={<ErrorBoundary><DrillSessionPage /></ErrorBoundary>} />
           <Route path="/drill" element={<ErrorBoundary><DrillSessionPage /></ErrorBoundary>} />
           <Route path="/fire" element={<ErrorBoundary><FIReInspectorPage /></ErrorBoundary>} />
           <Route path="/sync" element={<ErrorBoundary><SyncPanelPage /></ErrorBoundary>} />

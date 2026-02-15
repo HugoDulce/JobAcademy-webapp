@@ -1,8 +1,12 @@
-import { useEffect, useState, lazy, Suspense } from 'react';
-import { GraduationCap, Eye, RotateCcw, Play, Code, Pencil } from 'lucide-react';
+import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { GraduationCap, Eye, RotateCcw, Play, Code, Pencil, ArrowLeft } from 'lucide-react';
 import { fetchDueCards, answerCard, updateNote, checkAnkiStatus } from '../api/anki';
+import { fetchNodeCards, fetchSubtopicCards } from '../api/graph';
+import { fetchCard, fetchCardsByConcept } from '../api/cards';
 import { executeCode } from '../api/code';
 import type { DueCard } from '../types/anki';
+import type { Card } from '../types/card';
 import type { CodeExecuteResponse } from '../api/code';
 import LatexRenderer from '../components/shared/LatexRenderer';
 import CardEditModal from '../components/shared/CardEditModal';
@@ -39,17 +43,37 @@ const COGNITIVE_BADGE: Record<string, { label: string; cls: string }> = {
   extend: { label: 'Extend', cls: 'bg-amber-100 text-amber-700' },
 };
 
+function mapCardsToDueCards(cards: Card[]): DueCard[] {
+  return cards.map((c) => ({
+    card_id: c.card_id,
+    note_id: 0,
+    front: c.prompt,
+    back: c.solution,
+    deck: c.deck,
+    interval: 0,
+    ease: 0,
+    tags: c.tags,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export default function DrillSessionPage() {
+  const params = useParams<{ nodeId?: string }>();
+  const [searchParams] = useSearchParams();
+  const nodeId = params.nodeId ?? searchParams.get('node');
+  const conceptFilter = searchParams.get('concept');
+  const subtopicFilter = searchParams.get('subtopic');
+  const cardFilter = searchParams.get('card');
+
   const [cards, setCards] = useState<DueCard[]>([]);
   const [current, setCurrent] = useState(0);
   const [state, setState] = useState<SessionState>('loading');
   const [results, setResults] = useState<{ card_id: number | string; ease: number }[]>([]);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState<'anki' | 'server-srs' | null>(null);
+  const [mode, setMode] = useState<'anki' | 'server-srs' | 'node' | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -58,26 +82,67 @@ export default function DrillSessionPage() {
   const [codeOutput, setCodeOutput] = useState<CodeExecuteResponse | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
-  useEffect(() => {
-    loadCards();
-  }, []);
-
-  async function loadCards() {
+  const loadCards = useCallback(async () => {
     setState('loading');
+    setError('');
     try {
-      const status = await checkAnkiStatus();
-      setMode(status.connected ? 'anki' : 'server-srs');
-      const due = await fetchDueCards();
-      setCards(due);
-      setCurrent(0);
-      setResults([]);
-      resetCodeState();
-      setState(due.length > 0 ? 'start' : 'no-cards');
+      if (cardFilter) {
+        const card = await fetchCard(cardFilter);
+        const dueCards = mapCardsToDueCards([card]);
+        setMode('node');
+        setCards(dueCards);
+        setCurrent(0);
+        setResults([]);
+        resetCodeState();
+        setState(dueCards.length > 0 ? 'start' : 'no-cards');
+      } else if (subtopicFilter && conceptFilter) {
+        const cards = await fetchSubtopicCards(conceptFilter, subtopicFilter);
+        const dueCards = mapCardsToDueCards(cards);
+        setMode('node');
+        setCards(dueCards);
+        setCurrent(0);
+        setResults([]);
+        resetCodeState();
+        setState(dueCards.length > 0 ? 'start' : 'no-cards');
+      } else if (conceptFilter) {
+        const cards = await fetchCardsByConcept(conceptFilter);
+        const dueCards = mapCardsToDueCards(cards);
+        setMode('node');
+        setCards(dueCards);
+        setCurrent(0);
+        setResults([]);
+        resetCodeState();
+        setState(dueCards.length > 0 ? 'start' : 'no-cards');
+      } else if (nodeId) {
+        // Node-filtered drill: fetch cards from graph endpoint
+        const nodeCards = await fetchNodeCards(nodeId);
+        const dueCards = mapCardsToDueCards(nodeCards);
+        setMode('node');
+        setCards(dueCards);
+        setCurrent(0);
+        setResults([]);
+        resetCodeState();
+        setState(dueCards.length > 0 ? 'start' : 'no-cards');
+      } else {
+        // Standard SRS drill
+        const status = await checkAnkiStatus();
+        setMode(status.connected ? 'anki' : 'server-srs');
+        const due = await fetchDueCards();
+        setCards(due);
+        setCurrent(0);
+        setResults([]);
+        resetCodeState();
+        setState(due.length > 0 ? 'start' : 'no-cards');
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
       setState('error');
     }
-  }
+  }, [cardFilter, conceptFilter, nodeId, subtopicFilter]);
+
+  useEffect(() => {
+    loadCards();
+  }, [loadCards]);
 
   function resetCodeState() {
     setUserCode('');
@@ -131,9 +196,11 @@ export default function DrillSessionPage() {
 
   async function grade(ease: number) {
     const card = cards[current];
-    try {
-      await answerCard(card.card_id, ease);
-    } catch { /* continue even if Anki fails */ }
+    if (mode !== 'node') {
+      try {
+        await answerCard(card.card_id, ease);
+      } catch { /* continue even if Anki fails */ }
+    }
     setResults([...results, { card_id: card.card_id, ease }]);
 
     if (current + 1 < cards.length) {
@@ -150,15 +217,33 @@ export default function DrillSessionPage() {
   const card = cards[current];
   const correct = results.filter((r) => r.ease >= 3).length;
 
-  if (state === 'loading') return <div className="text-gray-500">Loading due cards...</div>;
-  if (state === 'error') return <div className="text-red-600">Error: {error}<br />Could not load drill cards. Please try again.</div>;
+  const drillScopeLabel = cardFilter
+    ?? (subtopicFilter && conceptFilter ? `${conceptFilter}.${subtopicFilter}` : null)
+    ?? conceptFilter
+    ?? nodeId;
+
+  // Breadcrumb shown when drilling a scoped graph target
+  const nodeBreadcrumb = drillScopeLabel && (
+    <div className="mb-4 flex items-center gap-2 text-sm">
+      <Link to="/graph" className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800">
+        <ArrowLeft size={14} />
+        Graph
+      </Link>
+      <span className="text-gray-400">/</span>
+      <span className="text-gray-700 font-medium">Drilling: {drillScopeLabel}</span>
+    </div>
+  );
+
+  if (state === 'loading') return <div className="text-gray-500">{nodeBreadcrumb}Loading due cards...</div>;
+  if (state === 'error') return <div className="text-red-600">{nodeBreadcrumb}Error: {error}<br />Could not load drill cards. Please try again.</div>;
 
   if (state === 'no-cards') {
     return (
       <div className="text-center py-16">
+        {nodeBreadcrumb}
         <GraduationCap size={48} className="mx-auto text-gray-300 mb-4" />
-        <h2 className="text-xl font-semibold text-gray-600">No cards due</h2>
-        <p className="text-gray-400 mt-2">All caught up! Come back later.</p>
+        <h2 className="text-xl font-semibold text-gray-600">No cards {drillScopeLabel ? `for ${drillScopeLabel}` : 'due'}</h2>
+        <p className="text-gray-400 mt-2">{drillScopeLabel ? 'This scope has no drill cards yet.' : 'All caught up! Come back later.'}</p>
       </div>
     );
   }
@@ -166,14 +251,19 @@ export default function DrillSessionPage() {
   if (state === 'start') {
     return (
       <div className="text-center py-16">
+        {nodeBreadcrumb}
         <GraduationCap size={48} className="mx-auto text-indigo-400 mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Drill Session</h2>
+        <h2 className="text-xl font-semibold mb-2">{drillScopeLabel ? `Drill: ${drillScopeLabel}` : 'Drill Session'}</h2>
         {mode && (
-          <span className={`inline-block text-xs px-2 py-0.5 rounded-full mb-2 ${mode === 'anki' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-            {mode === 'anki' ? 'Anki' : 'Server SRS'}
+          <span className={`inline-block text-xs px-2 py-0.5 rounded-full mb-2 ${
+            mode === 'anki' ? 'bg-blue-100 text-blue-700'
+            : mode === 'node' ? 'bg-indigo-100 text-indigo-700'
+            : 'bg-amber-100 text-amber-700'
+          }`}>
+            {mode === 'anki' ? 'Anki' : mode === 'node' ? 'Concept Drill' : 'Server SRS'}
           </span>
         )}
-        <p className="text-gray-500 mb-6">{cards.length} cards due for review</p>
+        <p className="text-gray-500 mb-6">{cards.length} cards {drillScopeLabel ? '' : 'due '}for review</p>
         <button onClick={startSession}
           className="px-6 py-3 bg-indigo-600 text-white rounded-lg text-lg hover:bg-indigo-700">
           Begin Review
@@ -185,6 +275,7 @@ export default function DrillSessionPage() {
   if (state === 'done') {
     return (
       <div className="max-w-lg mx-auto text-center py-16">
+        {nodeBreadcrumb}
         <h2 className="text-2xl font-bold mb-4">Session Complete</h2>
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow p-4">
@@ -196,10 +287,18 @@ export default function DrillSessionPage() {
             <p className="text-2xl font-bold text-green-600">{correct}/{results.length}</p>
           </div>
         </div>
-        <button onClick={loadCards}
-          className="flex items-center gap-2 mx-auto px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">
-          <RotateCcw size={16} /> New Session
-        </button>
+        <div className="flex items-center justify-center gap-3">
+          <button onClick={loadCards}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">
+            <RotateCcw size={16} /> New Session
+          </button>
+          {drillScopeLabel && (
+            <Link to="/graph"
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200">
+              <ArrowLeft size={16} /> Back to Graph
+            </Link>
+          )}
+        </div>
       </div>
     );
   }
@@ -214,6 +313,7 @@ export default function DrillSessionPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      {nodeBreadcrumb}
       <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
         <span className="flex items-center gap-2">
           Card {current + 1} of {cards.length}

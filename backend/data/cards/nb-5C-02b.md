@@ -4,6 +4,8 @@ tags: [uncategorized, conceptual, explain]
 card_id: "nb-5C-02b"
 fire_weight: 0.5
 notion_last_edited: "2026-02-08T17:06:00.000Z"
+concept_node: "NB"
+subtopic: "evaluation"
 ---
 
 # nb-5C-02b

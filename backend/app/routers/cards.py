@@ -15,6 +15,7 @@ def list_cards(
     layer: str | None = Query(None),
     topic: str | None = Query(None),
     search: str | None = Query(None),
+    concept: str | None = Query(None),
 ):
     """List all cards with optional filters."""
     cards = card_service.list_cards()
@@ -38,8 +39,21 @@ def list_cards(
             or q in c.prompt.lower()
             or q in c.solution.lower()
         ]
+    if concept:
+        concept_normalized = concept.strip().lower()
+        cards = [
+            c
+            for c in cards
+            if c.concept_node and c.concept_node.strip().lower() == concept_normalized
+        ]
 
     return cards
+
+
+@router.get("/by-concept/{concept_node}", response_model=list[Card])
+def list_cards_by_concept(concept_node: str):
+    """List cards for a specific concept node."""
+    return card_service.list_cards_by_concept(concept_node)
 
 
 @router.get("/{card_id}", response_model=Card)

@@ -13,6 +13,8 @@ export interface Card {
   topic: string | null;
   concept: string | null;
   has_visual: boolean;
+  concept_node: string | null;
+  subtopic: string | null;
 }
 
 export interface CardCreate {

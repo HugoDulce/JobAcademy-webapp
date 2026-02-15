@@ -4,6 +4,8 @@ tags: [uncategorized, mathematical, explain]
 card_id: "nb-4M-01b"
 fire_weight: 0.5
 notion_last_edited: "2026-02-08T17:05:00.000Z"
+concept_node: "NB"
+subtopic: "algorithm"
 ---
 
 # nb-4M-01b
