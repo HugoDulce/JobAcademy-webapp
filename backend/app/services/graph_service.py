@@ -125,19 +125,21 @@ def get_subtopic_cards(node_id: str, subtopic: str) -> list[Card]:
 
 
 def get_subtree_card_distribution(node_id: str) -> SubtreeCardDistribution:
-    """Get selected-node cards grouped by concepts in its prerequisite subtree."""
+    """Get cards across all nodes in the prerequisite subtree, grouped by concept."""
     subtree = get_subtree(node_id)
     subtree_node_ids = {n.id for n in subtree.nodes}
     if node_id not in subtree_node_ids:
         return SubtreeCardDistribution(node_id=node_id, total=0, breakdown=[])
 
-    node_cards = get_node_cards(node_id)
-    breakdown: dict[str, SubtreeCardBreakdownItem] = {}
+    # Collect cards from every node in the subtree
+    all_cards: dict[str, str] = {}  # card_id → concept_node_id
+    for sid in subtree_node_ids:
+        for card in get_node_cards(sid):
+            if card.card_id not in all_cards:
+                all_cards[card.card_id] = sid
 
-    for card in node_cards:
-        concept = card.concept_node or node_id
-        if concept not in subtree_node_ids:
-            concept = node_id
+    breakdown: dict[str, SubtreeCardBreakdownItem] = {}
+    for _card_id, concept in all_cards.items():
         item = breakdown.get(concept)
         if item is None:
             item = SubtreeCardBreakdownItem(
@@ -163,7 +165,7 @@ def get_subtree_card_distribution(node_id: str) -> SubtreeCardDistribution:
     )
     return SubtreeCardDistribution(
         node_id=node_id,
-        total=len(node_cards),
+        total=len(all_cards),
         breakdown=ordered_breakdown,
     )
 
