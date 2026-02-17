@@ -151,6 +151,34 @@ Drill sessions support editing card content (front/back) without leaving the rev
 
 **Files:** `backend/app/services/anki_service.py` (`update_note`), `backend/app/routers/anki.py` (`PUT /api/anki/update-note`), `frontend/src/api/anki.ts` (`updateNote`), `frontend/src/components/shared/CardEditModal.tsx`, `frontend/src/pages/DrillSessionPage.tsx`.
 
+### Subtree-Level Drilling with concept_node (2026-02-15)
+
+Cards can now be drilled per graph node instead of all-or-nothing. Each card has a `concept_node` frontmatter field linking it to a specific graph node (e.g., `NB`, `BAYES`, `COND`).
+
+**Dual-source card matching:** `get_node_cards(node_id)` matches by:
+1. Explicit `concept_node` field (primary)
+2. `NODE_CARD_MAP` prefix fallback for untagged cards only
+
+This ensures tagged cards appear under their specific node while legacy untagged cards still work.
+
+**Subtree card distribution:** `GET /api/graph/nodes/{id}/subtree-cards` aggregates cards across all nodes in the prerequisite subtree, grouped by concept.
+
+**Subtopic grouping:** Cards within a concept can be grouped by a `subtopic` frontmatter field. Endpoints: `GET /api/graph/nodes/{id}/subtopics`, `GET /api/graph/nodes/{id}/subtopics/{subtopic}/cards`.
+
+**Files:** `backend/app/models/card.py` (`concept_node`, `subtopic` fields), `backend/app/models/graph.py` (new models), `backend/app/parsers/card_parser.py` (parse + write), `backend/app/services/graph_service.py` (matching + distribution), `backend/app/routers/graph.py` (new endpoints), `frontend/src/types/graph.ts` (NavItem, Subtopic, SubtreeCardDistribution), `frontend/src/api/graph.ts` (new API functions), `frontend/src/pages/KnowledgeGraphPage.tsx` (3-level navigation).
+
+### Recursive Subtree Navigation (2026-02-15)
+
+Knowledge graph supports 3-level drill-down: Full Graph → Concept (prerequisite tree) → Subtopic (card list) → Card (detail).
+
+**Navigation stack:** `NavItem[]` tracks the breadcrumb trail. Each item has an `id`, `type` (concept/subtopic/card), and display `name`. Breadcrumb renders as clickable links; clicking any level navigates back and trims the stack.
+
+**Clickable node logic:** In prerequisite tree view, only nodes with incoming edges (prerequisites) that aren't the current root are navigable (get pointer cursor). All nodes are still selectable for the info panel. Leaf nodes (no prerequisites) show default cursor.
+
+**Card distribution panel:** Right panel shows per-concept card counts from the subtree, each with a drill button.
+
+**Files:** `frontend/src/pages/KnowledgeGraphPage.tsx` (Breadcrumb component, CardDistribution component, handleNodeClick, navigateToSubtree, navigateToSubtopic, navigateToBreadcrumb).
+
 ---
 
 ## Lessons Learned
@@ -175,6 +203,14 @@ Browser extensions can inject a Content Security Policy that blocks `eval`. Code
 
 The pyenv global Python lacks `httpx`, so `FastAPI.TestClient` fails. Always run tests with the backend venv: `./venv/bin/python -m pytest tests/ -v`. The uvicorn process uses the system Python at `/Library/Frameworks/Python.framework/Versions/3.12/` which has all deps installed.
 
+### Stale Vite dev server (2026-02-15)
+
+When a Vite dev server is already running on port 5176, starting a new one silently picks the next port (5177). The browser stays on 5176 serving stale code. **Always kill existing Vite processes before restarting:** `lsof -ti :5176 | xargs kill -9`. Also clear `node_modules/.vite` cache if code changes aren't reflected.
+
+### Patching lazy imports in tests (2026-02-15)
+
+`graph_service.py` imports `list_cards` lazily inside functions (`from app.services.card_service import list_cards`). Patching `app.services.graph_service.list_cards` fails because the attribute doesn't exist at module level. **Patch the source module:** `@patch("app.services.card_service.list_cards")`.
+
 ---
 
 ## Open TODOs (pick up next session)
@@ -182,8 +218,8 @@ The pyenv global Python lacks `httpx`, so `FastAPI.TestClient` fails. Always run
 1. **Add numpy + scikit-learn to `backend/requirements.txt`** — programming cards that `import numpy` or `from sklearn...` will fail on Render without these. Add pinned versions, push, and redeploy.
 2. **Verify Render deploy succeeded** — check dashboard or `curl https://<render-url>/api/health`. The push to `main` should have triggered auto-deploy.
 3. **Test code execution on Render** — confirm `setrlimit` activates on Linux, numpy/sklearn imports work after adding to requirements.
-4. **Keep ErrorBoundary in App.tsx** — useful for catching render crashes; no downside to keeping it.
-5. **Frontend test infrastructure** — no test framework exists yet. Consider adding vitest + @testing-library/react for component tests (CardEditModal, DrillSessionPage, etc.).
+4. **Tag remaining NB cards with `subtopic`** — all 42 cards have `concept_node` but only test fixtures have `subtopic`. Tag real cards to enable subtopic-level drilling.
+5. **Frontend test infrastructure** — no test framework exists yet. Consider adding vitest + @testing-library/react for component tests (KnowledgeGraphPage navigation, DrillSessionPage routing).
 
 ---
 

@@ -4,6 +4,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  Position,
   type Node,
   type Edge,
   useNodesState,
@@ -31,6 +32,11 @@ import type {
 } from '../types/graph';
 
 type ViewMode = 'full' | 'prerequisiteTree' | 'subtopic' | 'card';
+type LayoutMode = 'auto' | 'arrange';
+type ManualNodePositions = Record<string, { x: number; y: number }>;
+
+const MANUAL_LAYOUT_STORAGE_KEY = 'knowledge-graph.manual-layouts.v1';
+const MERGE_NODE_PREFIX = '__merge__::';
 
 function extractQuestionLabel(card: Card): string {
   const source = card.prompt || '';
@@ -65,6 +71,149 @@ function slugify(value: string): string {
 
 /* ---------- Layout helpers ---------- */
 
+function toNumeric(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function getNodeDimensions(node: Node, fallbackWidth: number, fallbackHeight: number) {
+  const style = (node.style ?? {}) as { width?: unknown; height?: unknown };
+  const width = toNumeric(node.width ?? style.width, fallbackWidth);
+  const height = toNumeric(node.height ?? style.height, fallbackHeight);
+  return { width, height };
+}
+
+function getNodeCenter(node: Node, fallbackWidth: number, fallbackHeight: number) {
+  const { width, height } = getNodeDimensions(node, fallbackWidth, fallbackHeight);
+  return {
+    x: node.position.x + width / 2,
+    y: node.position.y + height / 2,
+  };
+}
+
+function buildRoutedEdges(
+  graphEdges: KnowledgeGraph['edges'],
+  baseNodes: Node[],
+  mode: ViewMode,
+) {
+  if (mode === 'full') {
+    const directEdges: Edge[] = graphEdges.map((edge, i) => ({
+      id: `e-${i}`,
+      source: edge.source,
+      target: edge.target,
+      type: 'smoothstep',
+      animated: false,
+      style: { stroke: '#9ca3af', strokeWidth: 1 },
+      markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#9ca3af' },
+    }));
+    return { nodes: baseNodes, edges: directEdges };
+  }
+
+  const nodeById = new Map(baseNodes.map((node) => [node.id, node]));
+  const groupedByTarget = new Map<string, KnowledgeGraph['edges']>();
+  graphEdges.forEach((edge) => {
+    const existing = groupedByTarget.get(edge.target) ?? [];
+    groupedByTarget.set(edge.target, [...existing, edge]);
+  });
+
+  const edges: Edge[] = [];
+  const extraNodes: Node[] = [];
+  let edgeIndex = 0;
+
+  const addDirectEdge = (edge: KnowledgeGraph['edges'][number], withArrow: boolean) => {
+    edges.push({
+      id: `e-${edgeIndex++}`,
+      source: edge.source,
+      target: edge.target,
+      type: 'step',
+      animated: false,
+      style: { stroke: '#111827', strokeWidth: 1.8 },
+      ...(withArrow
+        ? { markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#111827' } }
+        : {}),
+    });
+  };
+
+  groupedByTarget.forEach((incomingEdges, targetId) => {
+    const targetNode = nodeById.get(targetId);
+    if (!targetNode || incomingEdges.length <= 1) {
+      incomingEdges.forEach((edge) => addDirectEdge(edge, true));
+      return;
+    }
+
+    const sourceNodes = incomingEdges
+      .map((edge) => nodeById.get(edge.source))
+      .filter((node): node is Node => !!node);
+
+    if (sourceNodes.length <= 1) {
+      incomingEdges.forEach((edge) => addDirectEdge(edge, true));
+      return;
+    }
+
+    const targetCenter = getNodeCenter(targetNode, 160, 50);
+    const targetDims = getNodeDimensions(targetNode, 160, 50);
+    const sourceCenters = sourceNodes.map((node) => getNodeCenter(node, 160, 50));
+    const minX = Math.min(...sourceCenters.map((point) => point.x));
+    const maxX = Math.max(...sourceCenters.map((point) => point.x));
+    const avgX = sourceCenters.reduce((sum, point) => sum + point.x, 0) / sourceCenters.length;
+    const avgY = sourceCenters.reduce((sum, point) => sum + point.y, 0) / sourceCenters.length;
+    const sourcesAreBelowTarget = avgY > targetCenter.y;
+    const junctionX = Math.min(Math.max(avgX, minX), maxX);
+    const junctionY = sourcesAreBelowTarget
+      ? targetNode.position.y + targetDims.height + 24
+      : targetNode.position.y - 24;
+
+    const junctionId = `${MERGE_NODE_PREFIX}${targetId}`;
+    if (!nodeById.has(junctionId)) {
+      const junctionNode: Node = {
+        id: junctionId,
+        position: { x: junctionX, y: junctionY },
+        data: { isVirtual: true },
+        selectable: false,
+        draggable: false,
+        focusable: false,
+        sourcePosition: Position.Top,
+        targetPosition: Position.Bottom,
+        style: {
+          width: 1,
+          height: 1,
+          opacity: 0,
+          pointerEvents: 'none',
+        },
+      };
+      nodeById.set(junctionId, junctionNode);
+      extraNodes.push(junctionNode);
+    }
+
+    incomingEdges.forEach((edge) => {
+      edges.push({
+        id: `e-${edgeIndex++}`,
+        source: edge.source,
+        target: junctionId,
+        type: 'step',
+        animated: false,
+        style: { stroke: '#111827', strokeWidth: 1.8 },
+      });
+    });
+
+    edges.push({
+      id: `e-${edgeIndex++}`,
+      source: junctionId,
+      target: targetId,
+      type: 'step',
+      animated: false,
+      style: { stroke: '#111827', strokeWidth: 2 },
+      markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#111827' },
+    });
+  });
+
+  return { nodes: [...baseNodes, ...extraNodes], edges };
+}
+
 function buildClickableNodeIds(
   graphData: KnowledgeGraph,
   viewMode: ViewMode,
@@ -96,6 +245,7 @@ function getLayoutedElements(
   selectedId?: string | null,
   clickableNodeIds?: Set<string>,
   mode: ViewMode = 'full',
+  manualPositions?: ManualNodePositions,
 ) {
   if (mode === 'subtopic') {
     const orderedNodes = [...graphData.nodes].sort((a, b) => {
@@ -113,7 +263,8 @@ function getLayoutedElements(
       }
 
       const isHeader = node.style_class === 'layerHeader';
-      const position = { x: isHeader ? 110 : 170, y: currentY };
+      const autoPosition = { x: isHeader ? 110 : 170, y: currentY };
+      const position = manualPositions?.[node.id] ?? autoPosition;
       const height = isHeader ? 42 : 76;
       currentY += isHeader ? 60 : 92;
       previousLayer = node.layer;
@@ -147,7 +298,7 @@ function getLayoutedElements(
         },
       };
     });
-    return { nodes, edges: [] };
+    return buildRoutedEdges(graphData.edges, nodes, mode);
   }
 
   const g = new dagre.graphlib.Graph();
@@ -165,6 +316,8 @@ function getLayoutedElements(
 
   const nodes: Node[] = graphData.nodes.map((node) => {
     const pos = g.node(node.id);
+    const autoPosition = { x: pos.x - 80, y: pos.y - 25 };
+    const position = manualPositions?.[node.id] ?? autoPosition;
     const masteryBorder = node.mastery !== null
       ? node.mastery >= 0.8 ? '#22c55e'
         : node.mastery >= 0.3 ? '#eab308'
@@ -173,7 +326,7 @@ function getLayoutedElements(
 
     return {
       id: node.id,
-      position: { x: pos.x - 80, y: pos.y - 25 },
+      position,
       data: { label: node.label, node },
       style: {
         background: node.id === selectedId ? '#eef2ff' : node.fill_color,
@@ -192,17 +345,7 @@ function getLayoutedElements(
     };
   });
 
-  const edges: Edge[] = graphData.edges.map((edge, i) => ({
-    id: `e-${i}`,
-    source: edge.source,
-    target: edge.target,
-    type: 'smoothstep',
-    animated: false,
-    style: { stroke: '#9ca3af', strokeWidth: 1 },
-    markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#9ca3af' },
-  }));
-
-  return { nodes, edges };
+  return buildRoutedEdges(graphData.edges, nodes, mode);
 }
 
 /** Build card-level graph nodes from card list (no edges). */
@@ -222,6 +365,7 @@ function buildCardGraphData(cards: Card[]): KnowledgeGraph {
   });
 
   const nodes: GN[] = [];
+  const edges: KnowledgeGraph['edges'] = [];
   sortedLayers.forEach((layerName) => {
     const layerCards = groupedByLayer.get(layerName) ?? [];
     const layerOrder = parseLayerOrder(layerName);
@@ -250,10 +394,15 @@ function buildCardGraphData(cards: Card[]): KnowledgeGraph {
         mastery: null,
         card_count: 1,
       });
+      edges.push({
+        source: card.card_id,
+        target: layerId,
+        type: 'supports',
+      });
     });
   });
 
-  return { nodes, edges: [], layers: {} };
+  return { nodes, edges, layers: {} };
 }
 
 /* ---------- Breadcrumb ---------- */
@@ -353,6 +502,17 @@ export default function KnowledgeGraphPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('full');
   const [fullGraphData, setFullGraphData] = useState<KnowledgeGraph | null>(null);
   const [currentGraphData, setCurrentGraphData] = useState<KnowledgeGraph | null>(null);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('auto');
+  const [manualLayouts, setManualLayouts] = useState<Record<string, ManualNodePositions>>(() => {
+    try {
+      const raw = localStorage.getItem(MANUAL_LAYOUT_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, ManualNodePositions>;
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
 
   // 3-level navigation stack: concept → subtopic → card
   const [navigationStack, setNavigationStack] = useState<NavItem[]>([]);
@@ -369,6 +529,35 @@ export default function KnowledgeGraphPage() {
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [subtopicCards, setSubtopicCards] = useState<Card[]>([]);
 
+  const getEffectiveGraphMode = useCallback((mode: ViewMode): ViewMode => (
+    mode === 'card' ? 'subtopic' : mode
+  ), []);
+
+  const getScopeKey = useCallback((mode: ViewMode, stack: NavItem[]) => {
+    const effectiveMode = getEffectiveGraphMode(mode);
+    if (effectiveMode === 'full') return 'full';
+
+    const conceptPath = stack
+      .filter((item) => item.type === 'concept')
+      .map((item) => item.id)
+      .join('>');
+
+    if (effectiveMode === 'prerequisiteTree') {
+      return `tree:${conceptPath || 'root'}`;
+    }
+
+    const subtopicId = stack.find((item) => item.type === 'subtopic')?.id;
+    return `subtopic:${subtopicId || conceptPath || 'root'}`;
+  }, [getEffectiveGraphMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MANUAL_LAYOUT_STORAGE_KEY, JSON.stringify(manualLayouts));
+    } catch {
+      // Ignore persistence errors.
+    }
+  }, [manualLayouts]);
+
   /* ---------- renderGraph ---------- */
 
   const renderGraph = useCallback((
@@ -376,12 +565,22 @@ export default function KnowledgeGraphPage() {
     selectedId: string | null,
     mode: ViewMode,
     rootNodeId: string | null,
+    scopeKey?: string,
   ) => {
     const clickableNodeIds = buildClickableNodeIds(graphData, mode, rootNodeId);
-    const { nodes: n, edges: e } = getLayoutedElements(graphData, selectedId, clickableNodeIds, mode);
+    const manualPositions = layoutMode === 'arrange' && scopeKey
+      ? manualLayouts[scopeKey]
+      : undefined;
+    const { nodes: n, edges: e } = getLayoutedElements(
+      graphData,
+      selectedId,
+      clickableNodeIds,
+      mode,
+      manualPositions,
+    );
     setNodes(n);
     setEdges(e);
-  }, [setEdges, setNodes]);
+  }, [layoutMode, manualLayouts, setEdges, setNodes]);
 
   /* ---------- Initial load ---------- */
 
@@ -389,7 +588,7 @@ export default function KnowledgeGraphPage() {
     fetchGraph().then((data) => {
       setFullGraphData(data);
       setCurrentGraphData(data);
-      renderGraph(data, null, 'full', null);
+      renderGraph(data, null, 'full', null, 'full');
       setInitialLoading(false);
     }).catch(() => setInitialLoading(false));
   }, [renderGraph]);
@@ -411,9 +610,9 @@ export default function KnowledgeGraphPage() {
       setViewMode('prerequisiteTree');
       const targetGn = subtree.nodes.find((n) => n.id === nodeId) ?? fallbackNode ?? null;
       setSelected(targetGn);
-      renderGraph(subtree, nodeId, 'prerequisiteTree', nodeId);
+      renderGraph(subtree, nodeId, 'prerequisiteTree', nodeId, getScopeKey('prerequisiteTree', stack));
     }).finally(() => setSubtreeLoading(false));
-  }, [renderGraph]);
+  }, [getScopeKey, renderGraph]);
 
   const navigateToSubtopic = useCallback((conceptId: string, subtopic: Subtopic) => {
     if (import.meta.env.DEV) {
@@ -429,7 +628,8 @@ export default function KnowledgeGraphPage() {
     setViewMode('subtopic');
     const emptyGraph = buildCardGraphData([]);
     setCurrentGraphData(emptyGraph);
-    renderGraph(emptyGraph, null, 'subtopic', null);
+    const subtopicScopeKey = getScopeKey('subtopic', newStack);
+    renderGraph(emptyGraph, null, 'subtopic', null, subtopicScopeKey);
     fetchSubtopicCards(conceptId, subtopic.id).then((cards) => {
       if (import.meta.env.DEV) {
         console.debug('[KnowledgeGraph] fetched subtopic cards', { subtopicId: subtopic.id, count: cards.length });
@@ -437,14 +637,14 @@ export default function KnowledgeGraphPage() {
       setSubtopicCards(cards);
       const cardGraph = buildCardGraphData(cards);
       setCurrentGraphData(cardGraph);
-      renderGraph(cardGraph, null, 'subtopic', null);
+      renderGraph(cardGraph, null, 'subtopic', null, subtopicScopeKey);
     }).catch((err) => {
       if (import.meta.env.DEV) {
         console.error('[KnowledgeGraph] failed to load subtopic cards', err);
       }
       setSubtopicCards([]);
     }).finally(() => setSubtreeLoading(false));
-  }, [navigationStack, renderGraph]);
+  }, [getScopeKey, navigationStack, renderGraph]);
 
   const startDrill = useCallback((level: 'concept' | 'subtopic' | 'card', id: string) => {
     const params = new URLSearchParams();
@@ -464,7 +664,8 @@ export default function KnowledgeGraphPage() {
   /* ---------- Node click handling ---------- */
 
   const handleNodeClick = useCallback((_event: MouseEvent, node: Node) => {
-    const gn = node.data.node as GN;
+    const gn = (node.data as { node?: GN } | undefined)?.node;
+    if (!gn) return;
     if (gn.style_class === 'layerHeader') {
       return;
     }
@@ -486,7 +687,13 @@ export default function KnowledgeGraphPage() {
         return;
       }
       if (currentGraphData) {
-        renderGraph(currentGraphData, gn.id, 'prerequisiteTree', currentRoot);
+        renderGraph(
+          currentGraphData,
+          gn.id,
+          'prerequisiteTree',
+          currentRoot,
+          getScopeKey('prerequisiteTree', navigationStack),
+        );
       }
       return;
     }
@@ -497,7 +704,7 @@ export default function KnowledgeGraphPage() {
       setSelectedCard(card);
       setSelected(gn);
       if (currentGraphData) {
-        renderGraph(currentGraphData, gn.id, 'subtopic', null);
+        renderGraph(currentGraphData, gn.id, 'subtopic', null, getScopeKey('subtopic', navigationStack));
       }
 
       // Also add card to breadcrumb
@@ -515,7 +722,7 @@ export default function KnowledgeGraphPage() {
       setSelectedCard(card);
       setSelected(gn);
       if (currentGraphData) {
-        renderGraph(currentGraphData, gn.id, 'subtopic', null);
+        renderGraph(currentGraphData, gn.id, 'subtopic', null, getScopeKey('subtopic', navigationStack));
       }
       const baseStack = navigationStack.filter((n) => n.type !== 'card');
       const cardNav: NavItem = { id: gn.id, type: 'card', name: gn.id };
@@ -525,11 +732,40 @@ export default function KnowledgeGraphPage() {
     currentGraphData,
     hasPrerequisites,
     navigationStack,
+    getScopeKey,
     navigateToSubtree,
     renderGraph,
     subtopicCards,
     viewMode,
   ]);
+
+  const handleNodeDragStop = useCallback((_event: MouseEvent, node: Node) => {
+    const effectiveMode = getEffectiveGraphMode(viewMode);
+    if (layoutMode !== 'arrange' || effectiveMode === 'full') return;
+    if (node.id.startsWith(MERGE_NODE_PREFIX)) return;
+
+    const scopeKey = getScopeKey(effectiveMode, navigationStack);
+    setManualLayouts((prev) => ({
+      ...prev,
+      [scopeKey]: {
+        ...(prev[scopeKey] ?? {}),
+        [node.id]: { x: node.position.x, y: node.position.y },
+      },
+    }));
+  }, [getEffectiveGraphMode, getScopeKey, layoutMode, navigationStack, viewMode]);
+
+  const resetCurrentLayout = useCallback(() => {
+    const effectiveMode = getEffectiveGraphMode(viewMode);
+    if (effectiveMode === 'full') return;
+    const scopeKey = getScopeKey(effectiveMode, navigationStack);
+    setManualLayouts((prev) => {
+      if (!prev[scopeKey]) return prev;
+      const next = { ...prev };
+      delete next[scopeKey];
+      return next;
+    });
+    setLayoutMode('auto');
+  }, [getEffectiveGraphMode, getScopeKey, navigationStack, viewMode]);
 
   /* ---------- Breadcrumb navigation ---------- */
 
@@ -544,7 +780,7 @@ export default function KnowledgeGraphPage() {
       setSubtopicCards([]);
       setSubtopics([]);
       setCurrentGraphData(fullGraphData);
-      renderGraph(fullGraphData, null, 'full', null);
+      renderGraph(fullGraphData, null, 'full', null, 'full');
       return;
     }
 
@@ -568,11 +804,12 @@ export default function KnowledgeGraphPage() {
       fetchSubtopicCards(conceptId, subtopicId).then((cards) => {
         setSubtopicCards(cards);
         const cardGraph = buildCardGraphData(cards);
+        const nextStack = [...trimmedStack, targetItem];
         setCurrentGraphData(cardGraph);
-        setNavigationStack([...trimmedStack, targetItem]);
+        setNavigationStack(nextStack);
         setViewMode('subtopic');
         setSelected(null);
-        renderGraph(cardGraph, null, 'subtopic', null);
+        renderGraph(cardGraph, null, 'subtopic', null, getScopeKey('subtopic', nextStack));
       }).finally(() => setSubtreeLoading(false));
     }
     // card-level breadcrumb click: already at that card, no-op
@@ -599,6 +836,30 @@ export default function KnowledgeGraphPage() {
       cancelled = true;
     };
   }, [selected?.id, viewMode]);
+
+  /* ---------- Re-render graph on layout mode / saved position changes ---------- */
+
+  useEffect(() => {
+    if (!currentGraphData) return;
+    const effectiveMode = getEffectiveGraphMode(viewMode);
+    const selectedId = selected?.id ?? selectedCard?.card_id ?? null;
+    const rootNodeId = effectiveMode === 'prerequisiteTree'
+      ? navigationStack[navigationStack.length - 1]?.id ?? null
+      : null;
+    const scopeKey = getScopeKey(effectiveMode, navigationStack);
+    renderGraph(currentGraphData, selectedId, effectiveMode, rootNodeId, scopeKey);
+  }, [
+    currentGraphData,
+    getEffectiveGraphMode,
+    getScopeKey,
+    layoutMode,
+    manualLayouts,
+    navigationStack,
+    renderGraph,
+    selected?.id,
+    selectedCard?.card_id,
+    viewMode,
+  ]);
 
   /* ---------- Fetch card distribution (existing) ---------- */
 
@@ -643,6 +904,10 @@ export default function KnowledgeGraphPage() {
   const subtopicNav = navigationStack.find((n) => n.type === 'subtopic');
   const showRightPanel = viewMode === 'subtopic' || viewMode === 'card' || (viewMode === 'prerequisiteTree' && !!selected);
   const subtopicsLoading = viewMode === 'prerequisiteTree' && !!selected && subtopicsNodeId !== selected.id;
+  const effectiveViewMode = getEffectiveGraphMode(viewMode);
+  const canArrangeLayout = effectiveViewMode !== 'full';
+  const currentScopeKey = getScopeKey(effectiveViewMode, navigationStack);
+  const hasSavedLayout = !!manualLayouts[currentScopeKey] && Object.keys(manualLayouts[currentScopeKey]).length > 0;
 
   return (
     <div className="h-[calc(100vh-48px)] flex">
@@ -655,6 +920,33 @@ export default function KnowledgeGraphPage() {
           />
         )}
         <div className="flex-1 relative">
+          {canArrangeLayout && (
+            <div className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-md border border-gray-200 bg-white/95 p-1 text-xs shadow-sm">
+              <button
+                onClick={() => setLayoutMode('auto')}
+                className={layoutMode === 'auto'
+                  ? 'rounded px-2 py-1 font-medium bg-indigo-100 text-indigo-700'
+                  : 'rounded px-2 py-1 text-gray-600 hover:bg-gray-100'}
+              >
+                Auto
+              </button>
+              <button
+                onClick={() => setLayoutMode('arrange')}
+                className={layoutMode === 'arrange'
+                  ? 'rounded px-2 py-1 font-medium bg-indigo-100 text-indigo-700'
+                  : 'rounded px-2 py-1 text-gray-600 hover:bg-gray-100'}
+              >
+                Arrange
+              </button>
+              <button
+                onClick={resetCurrentLayout}
+                disabled={!hasSavedLayout}
+                className="rounded px-2 py-1 text-gray-600 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-transparent"
+              >
+                Reset
+              </button>
+            </div>
+          )}
           {subtreeLoading && (
             <div className="absolute right-3 top-3 z-10 rounded-md border border-gray-200 bg-white/95 px-2 py-1 text-xs text-gray-500 shadow-sm">
               Updating tree...
@@ -666,6 +958,10 @@ export default function KnowledgeGraphPage() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeClick={handleNodeClick}
+            onNodeDragStop={handleNodeDragStop}
+            nodesDraggable={canArrangeLayout && layoutMode === 'arrange'}
+            elementsSelectable={canArrangeLayout && layoutMode === 'arrange'}
+            nodesConnectable={false}
             fitView
             minZoom={0.1}
             maxZoom={2}
@@ -796,7 +1092,15 @@ export default function KnowledgeGraphPage() {
                       if (gn) {
                         setSelectedCard(card);
                         setSelected(gn);
-                        if (currentGraphData) renderGraph(currentGraphData, card.card_id, 'subtopic', null);
+                        if (currentGraphData) {
+                          renderGraph(
+                            currentGraphData,
+                            card.card_id,
+                            'subtopic',
+                            null,
+                            getScopeKey('subtopic', navigationStack),
+                          );
+                        }
                         const baseStack = navigationStack.filter((n) => n.type !== 'card');
                         setNavigationStack([...baseStack, { id: card.card_id, type: 'card', name: card.card_id }]);
                         setViewMode('card');
@@ -878,7 +1182,7 @@ export default function KnowledgeGraphPage() {
                 setNavigationStack([]);
                 setViewMode('full');
                 setCurrentGraphData(fullGraphData);
-                renderGraph(fullGraphData, null, 'full', null);
+                renderGraph(fullGraphData, null, 'full', null, 'full');
               }
               setSelected(null);
               setSelectedCard(null);
